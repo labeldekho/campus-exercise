@@ -1,0 +1,209 @@
+<title>Campus Pump Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;600&display=swap">
+<style>
+/* Layout: one working column; controls, then four result tiles, the day chart, and the four-schedule comparison. */
+:root {
+  --bg: #F7F5EF; --card: #FFFDF8; --line: #D9D2C3; --soft: #ECE7DA;
+  --ink: #14213D; --muted: #5D667A; --amber: #E39B2D; --amber-text: #A35F00;
+  --blue: #2F6FB3; --pump: rgba(47, 111, 179, 0.12); --good-bg: #E6F0FA; --good: #1F5A99;
+  --display: 'Space Grotesk', Arial, sans-serif; --body: 'Inter', Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111A2E; --card: #18233C; --line: #2C3A5A; --soft: #22304F;
+  --ink: #EEF1F6; --muted: #A9B4C8; --amber: #E8A640; --amber-text: #F0B65A;
+  --blue: #6FA4DE; --pump: rgba(111, 164, 222, 0.16); --good-bg: #1E3556; --good: #9CC4EE; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111A2E; --card: #18233C; --line: #2C3A5A; --soft: #22304F;
+  --ink: #EEF1F6; --muted: #A9B4C8; --amber: #E8A640; --amber-text: #F0B65A;
+  --blue: #6FA4DE; --pump: rgba(111, 164, 222, 0.16); --good-bg: #1E3556; --good: #9CC4EE; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.45; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--display); font-size: clamp(28px, 5vw, 40px); margin: 0; text-wrap: balance; }
+h2 { font-family: var(--display); font-size: 20px; margin: 0; }
+.intro { margin: 6px 0 0; color: var(--muted); max-width: 65ch; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.label { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber-text); margin: 0 0 8px; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.seg button { font: inherit; font-size: 15px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); cursor: pointer; min-width: 0; }
+.seg button small { display: block; color: var(--muted); font-size: 13px; }
+.seg button[aria-pressed="true"] { border: 2px solid var(--amber); background: var(--soft); padding: 9px 11px; font-weight: 600; }
+.seg button:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.slider-row { display: flex; align-items: center; gap: 14px; }
+.slider-row input { flex: 1; accent-color: var(--amber); min-width: 0; }
+.kwp { font-family: var(--display); font-size: 22px; font-weight: 700; min-width: 7ch; text-align: right; font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tile .t { font-size: 13px; color: var(--muted); }
+.tile .v { font-family: var(--display); font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile .n { font-size: 13px; color: var(--muted); }
+.ok { color: var(--good); }
+.chart-wrap { overflow-x: auto; }
+svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: var(--muted); }
+.sw { display: inline-block; width: 18px; height: 5px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+.sw.band { height: 12px; background: var(--pump); border: 1px solid var(--blue); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 560px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+tr.current td { background: var(--soft); }
+.best { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--good); background: var(--good-bg); border-radius: 20px; padding: 1px 8px; }
+.note { color: var(--muted); font-size: 14px; margin: 0; max-width: 75ch; }
+@media (max-width: 720px) {
+  .seg, .tiles { grid-template-columns: 1fr 1fr; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Campus Pump Planner</h1>
+    <p class="intro">The pumps must run 4 hours a day to fill the water tanks. Choose a day, set the rooftop solar size and try the four schedules. Which one is best, and which number shows it?</p>
+  </header>
+
+  <section class="panel" aria-label="Settings">
+    <div>
+      <p class="label" id="dayLabel">1 · Day</p>
+      <div class="seg" id="days" role="group" aria-labelledby="dayLabel"></div>
+    </div>
+    <div>
+      <p class="label"><label for="solar">2 · Rooftop solar capacity</label></p>
+      <div class="slider-row">
+        <input id="solar" type="range" min="0" max="800" step="50" value="400">
+        <span class="kwp" id="solarOut">400 kWp</span>
+      </div>
+    </div>
+    <div>
+      <p class="label" id="schLabel">3 · Pumping schedule</p>
+      <div class="seg" id="schedules" role="group" aria-labelledby="schLabel"></div>
+    </div>
+  </section>
+
+  <section class="tiles" aria-label="Results for the chosen schedule" aria-live="polite">
+    <div class="tile"><span class="t">Highest grid draw</span><span class="v" id="peak"></span><span class="n" id="peakAt"></span></div>
+    <div class="tile"><span class="t">Daily grid energy</span><span class="v" id="energy"></span><span class="n">bought from the grid</span></div>
+    <div class="tile"><span class="t">Solar used on campus</span><span class="v" id="used"></span><span class="n" id="wasted"></span></div>
+    <div class="tile"><span class="t">Pumping</span><span class="v ok" id="pumpOk"></span><span class="n" id="pumpH"></span></div>
+  </section>
+
+  <section class="panel">
+    <h2>The chosen day, every 15 minutes</h2>
+    <div class="chart-wrap"><svg id="chart" viewBox="0 0 900 360" role="img" aria-label="Chart of campus demand with pumping, solar output and grid draw over one day"></svg></div>
+    <div class="legend">
+      <span><span class="sw band" style="background:var(--soft);border-color:var(--muted)"></span>Demand incl. pumping (kW)</span>
+      <span><span class="sw" style="background:var(--amber)"></span>Rooftop solar (kW)</span>
+      <span><span class="sw" style="background:var(--blue)"></span>Grid draw (kW)</span>
+      <span><span class="sw band"></span>Pumps running</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>All four schedules on this day</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Schedule</th><th>Highest grid draw</th><th>Daily grid energy</th><th>Solar used</th><th>Pumping</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note">“Best” marks the lowest highest-grid-draw, the lowest grid energy and the highest solar use. Ties are marked on every schedule that shares the best value.</p>
+  </section>
+
+  <p class="note">Synthetic sample campus for teaching. Grid draw = demand + pumping − solar, never below zero; solar the campus cannot use is wasted. Energy accounting only: water levels and tank size, voltage, pump and motor limits and tariffs are not modelled.</p>
+</div>
+
+<script>
+const P = {"pump_kw":60.0,"pump_hours":4.0,"schedules":{"S1":{"name":"Morning","slots":[[5,9]]},"S2":{"name":"Midday","slots":[[11,15]]},"S3":{"name":"Split","slots":[[6,8],[12,14]]},"S4":{"name":"Night","slots":[[22,24],[0,2]]}},"demand":{"sunny-normal":[89.88,89.62,89.38,89.12,88.88,88.62,88.38,88.12,87.88,87.62,87.38,87.12,86.88,86.62,86.38,86.12,85.88,85.62,85.38,85.12,90.0,100.0,110.0,120.0,130.0,140.0,145.42,146.25,147.08,147.92,156.67,173.33,185.0,191.67,209.17,237.5,257.92,259.58,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,243.75,221.25,210.0,210.0,221.25,243.75,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,250.31,230.94,208.12,191.88,185.53,189.09,192.64,196.2,204.45,217.38,225.75,229.56,233.37,237.17,240.98,238.5,229.74,220.98,207.21,188.45,174.68,165.92,157.28,148.75,140.22,131.7,123.17,114.65,105.29,95.1],"cloudy-normal":[89.88,89.62,89.38,89.12,88.88,88.62,88.38,88.12,87.88,87.62,87.38,87.12,86.88,86.62,86.38,86.12,85.88,85.62,85.38,85.12,90.0,100.0,110.0,120.0,130.0,140.0,145.42,146.25,147.08,147.92,156.67,173.33,185.0,191.67,209.17,237.5,257.92,259.58,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,243.75,221.25,210.0,210.0,221.25,243.75,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,255.0,250.31,230.94,208.12,191.88,185.53,189.09,192.64,196.2,204.45,217.38,225.75,229.56,233.37,237.17,240.98,238.5,229.74,220.98,207.21,188.45,174.68,165.92,157.28,148.75,140.22,131.7,123.17,114.65,105.29,95.1],"sunny-exam":[89.88,89.62,89.38,89.12,88.88,88.62,88.38,88.12,87.88,87.62,87.38,87.12,86.88,86.62,86.38,86.12,85.88,85.62,85.38,85.12,90.0,100.0,110.0,120.0,130.0,140.0,145.42,146.25,147.08,147.92,157.92,177.08,191.25,200.42,220.42,251.25,272.92,274.58,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,258.75,236.25,225.0,225.0,236.25,258.75,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,267.5,252.5,234.06,222.19,220.22,228.15,236.08,244.01,254.45,267.38,275.75,279.56,283.37,287.17,290.98,288.5,279.74,270.98,262.21,253.45,244.68,235.92,209.78,166.25,140.22,131.7,123.17,114.65,105.29,95.1],"cloudy-exam":[89.88,89.62,89.38,89.12,88.88,88.62,88.38,88.12,87.88,87.62,87.38,87.12,86.88,86.62,86.38,86.12,85.88,85.62,85.38,85.12,90.0,100.0,110.0,120.0,130.0,140.0,145.42,146.25,147.08,147.92,157.92,177.08,191.25,200.42,220.42,251.25,272.92,274.58,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,258.75,236.25,225.0,225.0,236.25,258.75,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,270.0,267.5,252.5,234.06,222.19,220.22,228.15,236.08,244.01,254.45,267.38,275.75,279.56,283.37,287.17,290.98,288.5,279.74,270.98,262.21,253.45,244.68,235.92,209.78,166.25,140.22,131.7,123.17,114.65,105.29,95.1]},"solar_per_kwp":{"sunny":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0132,0.0493,0.0907,0.1351,0.1813,0.2287,0.2766,0.3245,0.3718,0.4182,0.4634,0.5068,0.5483,0.5874,0.6239,0.6575,0.688,0.7152,0.7389,0.7588,0.775,0.7872,0.7954,0.7995,0.7995,0.7954,0.7872,0.775,0.7588,0.7389,0.7152,0.688,0.6575,0.6239,0.5874,0.5483,0.5068,0.4634,0.4182,0.3718,0.3245,0.2766,0.2287,0.1813,0.1351,0.0907,0.0493,0.0132,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"cloudy":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0046,0.0172,0.0317,0.0473,0.0635,0.0801,0.0968,0.1136,0.1301,0.1464,0.1622,0.1774,0.1919,0.2056,0.2184,0.2301,0.2408,0.2503,0.2586,0.2656,0.2712,0.2755,0.2784,0.2798,0.2798,0.2784,0.2755,0.2712,0.2656,0.2586,0.2503,0.2408,0.2301,0.2184,0.2056,0.1919,0.1774,0.1622,0.1464,0.1301,0.1136,0.0968,0.0801,0.0635,0.0473,0.0317,0.0172,0.0046,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]}};
+const DAYS = [["sunny-normal", "Sunny", "normal week"], ["cloudy-normal", "Cloudy", "normal week"],
+              ["sunny-exam", "Sunny", "exam week"], ["cloudy-exam", "Cloudy", "exam week"]];
+const SCH = ["S1", "S2", "S3", "S4"];
+const state = { day: "sunny-normal", solar: 400, sch: "S2" };
+
+const fmtTime = h => `${String(Math.floor(h) % 24).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+const slotText = s => P.schedules[s].slots.map(([a, b]) => `${fmtTime(a)}–${fmtTime(b)}`).join(" + ");
+
+function pumping(s) {
+  const p = new Array(96).fill(0);
+  for (const [a, b] of P.schedules[s].slots) for (let i = Math.round(a * 4); i < Math.round(b * 4); i++) p[i] = P.pump_kw;
+  return p;
+}
+
+// Same calculation as campus_model.py
+function simulate(day, kwp, s) {
+  const sky = day.startsWith("sunny") ? "sunny" : "cloudy";
+  const demand = P.demand[day], pump = pumping(s);
+  const solar = P.solar_per_kwp[sky].map(v => v * kwp);
+  const load = demand.map((d, i) => d + pump[i]);
+  const grid = load.map((l, i) => Math.max(0, l - solar[i]));
+  const surplus = load.map((l, i) => Math.max(0, solar[i] - l));
+  const sum = a => a.reduce((x, y) => x + y, 0);
+  const solarKwh = sum(solar) * 0.25, wasted = sum(surplus) * 0.25;
+  const peak = Math.max(...grid), iPeak = grid.indexOf(peak);
+  const pumpH = pump.filter(v => v > 0).length * 0.25;
+  return { load, solar, grid, pump,
+    peak: Math.round(peak * 10) / 10, peakAt: fmtTime(iPeak / 4),
+    energy: Math.round(sum(grid) * 0.25 * 10) / 10,
+    used: solarKwh > 0 ? Math.round((1 - wasted / solarKwh) * 1000) / 10 : null,
+    wasted: Math.round(wasted), pumpH, ok: pumpH >= P.pump_hours };
+}
+
+function buttons() {
+  document.getElementById("days").innerHTML = DAYS.map(([k, a, b]) =>
+    `<button type="button" data-day="${k}" aria-pressed="${k === state.day}">${a}<small>${b}</small></button>`).join("");
+  document.getElementById("schedules").innerHTML = SCH.map(s =>
+    `<button type="button" data-sch="${s}" aria-pressed="${s === state.sch}">${s} ${P.schedules[s].name}<small>${slotText(s)}</small></button>`).join("");
+}
+
+function chart(r) {
+  const W = 900, H = 360, L = 52, R = 12, T = 24, B = 36;
+  const top = Math.max(400, Math.ceil(Math.max(...r.load, ...r.solar) / 100) * 100);
+  const x = i => L + (i / 96) * (W - L - R), y = v => T + (1 - v / top) * (H - T - B);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  let s = "";
+  r.pump.forEach((v, i) => { if (v > 0) s += `<rect x="${x(i)}" y="${T}" width="${x(i + 1) - x(i) + 0.5}" height="${H - T - B}" fill="${css("--pump")}"/>`; });
+  for (let v = 0; v <= top; v += 100) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${css("--line")}"/>` +
+    `<text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" fill="${css("--muted")}" font-size="12">${v}</text>`;
+  s += `<text x="${L - 8}" y="12" text-anchor="end" fill="${css("--muted")}" font-size="12">kW</text>`;
+  for (let h = 0; h <= 24; h += 3) s += `<text x="${x(h * 4)}" y="${H - 12}" text-anchor="${h === 24 ? "end" : h === 0 ? "start" : "middle"}" fill="${css("--muted")}" font-size="12">${String(h).padStart(2, "0")}:00</text>`;
+  const pl = (a, c, w) => `<polyline fill="none" stroke="${c}" stroke-width="${w}" stroke-linejoin="round" points="${a.map((v, i) => `${x(i + 0.5).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/>`;
+  s += `<polygon fill="${css("--soft")}" points="${x(0.5)},${y(0)} ${r.load.map((v, i) => `${x(i + 0.5).toFixed(1)},${y(v).toFixed(1)}`).join(" ")} ${x(95.5)},${y(0)}"/>`;
+  s += pl(r.load, css("--muted"), 1.5) + pl(r.solar, css("--amber"), 2.5) + pl(r.grid, css("--blue"), 3);
+  document.getElementById("chart").innerHTML = s;
+}
+
+function render() {
+  document.getElementById("solarOut").textContent = state.solar + " kWp";
+  const r = simulate(state.day, state.solar, state.sch);
+  document.getElementById("peak").textContent = Math.round(r.peak) + " kW";
+  document.getElementById("peakAt").textContent = "at " + r.peakAt;
+  document.getElementById("energy").textContent = Math.round(r.energy).toLocaleString("en-IN") + " kWh";
+  document.getElementById("used").textContent = r.used === null ? "–" : r.used.toFixed(1) + "%";
+  document.getElementById("wasted").textContent = r.used === null ? "no solar installed" : r.wasted.toLocaleString("en-IN") + " kWh wasted";
+  document.getElementById("pumpOk").textContent = r.ok ? "Complete" : "Not complete";
+  document.getElementById("pumpH").textContent = r.pumpH + " of " + P.pump_hours + " hours";
+  chart(r);
+
+  const all = SCH.map(s => ({ s, ...simulate(state.day, state.solar, s) }));
+  const minPeak = Math.min(...all.map(a => Math.round(a.peak)));
+  const minEnergy = Math.min(...all.map(a => Math.round(a.energy)));
+  const maxUsed = Math.max(...all.map(a => a.used ?? -1));
+  const best = '<span class="best">best</span>';
+  document.getElementById("rows").innerHTML = all.map(a => `<tr class="${a.s === state.sch ? "current" : ""}">
+    <td><b>${a.s} ${P.schedules[a.s].name}</b><br><small>${slotText(a.s)}</small></td>
+    <td>${Math.round(a.peak)} kW at ${a.peakAt}${Math.round(a.peak) === minPeak ? best : ""}</td>
+    <td>${Math.round(a.energy).toLocaleString("en-IN")} kWh${Math.round(a.energy) === minEnergy ? best : ""}</td>
+    <td>${a.used === null ? "–" : a.used.toFixed(1) + "%"}${a.used !== null && a.used === maxUsed ? best : ""}</td>
+    <td>${a.ok ? "Complete" : "Not complete"}</td></tr>`).join("");
+}
+
+document.getElementById("days").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return; state.day = b.dataset.day; buttons(); render(); });
+document.getElementById("schedules").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return; state.sch = b.dataset.sch; buttons(); render(); });
+document.getElementById("solar").addEventListener("input", e => { state.solar = Number(e.target.value); render(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+buttons(); render();
+</script>
